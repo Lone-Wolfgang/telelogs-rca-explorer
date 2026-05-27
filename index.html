@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TeleLogs — 5G RCA Annotated Explorer</title>
+<style>
+  /* -------------------------------------------------------------------
+     Fonts & tokens — AT&T-aligned light theme
+     -------------------------------------------------------------------
+     Brand anchor: AT&T Blue #009FDB
+     Secondary:    AT&T Navy #00388F
+     The page is light by default — AT&T's identity is overwhelmingly
+     white-background. We keep 5 distinct category hues for readability
+     but anchor the most important one (signal) in the brand blue.
+     ------------------------------------------------------------------- */
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+  :root {
+    /* Surfaces */
+    --bg:        #ffffff;       /* page background — clean white, AT&T standard */
+    --panel:    #f5f8fb;        /* sidebar / panel — very faint cool gray */
+    --panel-2:  #eef3f8;        /* tables and chips — one step deeper */
+    --ink:      #0a1929;        /* body text — near-black with blue undertone */
+    --ink-dim:  #5a6b7d;        /* secondary text */
+    --rule:     #d6dee6;        /* borders / dividers */
+
+    /* AT&T brand anchors */
+    --att-blue:  #009FDB;       /* primary AT&T blue */
+    --att-navy:  #00388F;       /* secondary AT&T navy */
+    --att-sky:   #5BC2E7;       /* light brand accent */
+
+    /* Category palette — readable on white, coordinated with AT&T blue */
+    --c-signal:    #009FDB;     /* signal quality → AT&T blue (hero) */
+    --c-topology:  #00388F;     /* cell topology → AT&T navy */
+    --c-antenna:   #C75300;     /* antenna config → warm amber (darkened for white-bg readability) */
+    --c-mobility:  #00838A;     /* mobility → teal, adjacent to blue family */
+    --c-location:  #B02365;     /* geo → magenta-pink, deep enough to read on white */
+
+    /* Hover tints — each at ~12% alpha so highlights don't shout */
+    --c-signal-bg:    rgba(0, 159, 219, 0.12);
+    --c-topology-bg:  rgba(0, 56, 143, 0.12);
+    --c-antenna-bg:   rgba(199, 83, 0, 0.12);
+    --c-mobility-bg:  rgba(0, 131, 138, 0.12);
+    --c-location-bg:  rgba(176, 35, 101, 0.12);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  /* -------------------------------------------------------------------
+     Top bar with dropdown
+     ------------------------------------------------------------------- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    border-bottom: 2px solid var(--att-blue);
+    padding: 14px 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .topbar .brand {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .topbar .brand strong {
+    color: var(--att-navy);
+    font-weight: 700;
+  }
+  .topbar .controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .topbar label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .topbar select {
+    background: #fff;
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    min-width: 320px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .topbar select:hover { border-color: var(--att-blue); }
+  .topbar select:focus {
+    outline: none;
+    border-color: var(--att-blue);
+    box-shadow: 0 0 0 3px var(--c-signal-bg);
+  }
+
+  .answer-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 12px;
+    background: var(--att-blue);
+    color: #fff;
+    border: 1px solid var(--att-blue);
+    letter-spacing: 0.05em;
+  }
+
+  /* -------------------------------------------------------------------
+     Layout
+     ------------------------------------------------------------------- */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    min-height: calc(100vh - 60px);
+  }
+
+  main {
+    padding: 48px 64px;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  aside {
+    position: sticky;
+    top: 60px;
+    height: calc(100vh - 60px);
+    background: var(--panel);
+    border-left: 1px solid var(--rule);
+    padding: 32px;
+    overflow-y: auto;
+  }
+
+  /* -------------------------------------------------------------------
+     Typography
+     ------------------------------------------------------------------- */
+  h1 {
+    font-weight: 800;
+    font-size: 38px;
+    letter-spacing: -0.025em;
+    margin: 0 0 8px 0;
+    line-height: 1.05;
+    color: var(--att-navy);
+  }
+  h1 .accent {
+    font-weight: 600;
+    color: var(--att-blue);
+  }
+  .subtitle {
+    color: var(--ink-dim);
+    margin-bottom: 40px;
+    font-size: 16px;
+  }
+  h2 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--ink-dim);
+    margin: 40px 0 14px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule);
+  }
+  p, li { font-size: 16px; }
+
+  /* -------------------------------------------------------------------
+     Highlight terms
+     ------------------------------------------------------------------- */
+  .term {
+    cursor: help;
+    border-bottom: 2px solid transparent;
+    padding: 0 2px;
+    border-radius: 2px;
+    transition: background 0.15s, border-color 0.15s;
+    font-weight: 600;
+  }
+  .term:hover { filter: brightness(1.1); }
+
+  .term[data-cat="signal"]    { color: var(--c-signal);    border-bottom-color: var(--c-signal); }
+  .term[data-cat="topology"]  { color: var(--c-topology);  border-bottom-color: var(--c-topology); }
+  .term[data-cat="antenna"]   { color: var(--c-antenna);   border-bottom-color: var(--c-antenna); }
+  .term[data-cat="mobility"]  { color: var(--c-mobility);  border-bottom-color: var(--c-mobility); }
+  .term[data-cat="location"]  { color: var(--c-location);  border-bottom-color: var(--c-location); }
+
+  .term[data-cat="signal"]:hover    { background: var(--c-signal-bg); }
+  .term[data-cat="topology"]:hover  { background: var(--c-topology-bg); }
+  .term[data-cat="antenna"]:hover   { background: var(--c-antenna-bg); }
+  .term[data-cat="mobility"]:hover  { background: var(--c-mobility-bg); }
+  .term[data-cat="location"]:hover  { background: var(--c-location-bg); }
+
+  .term.active { background: rgba(0, 0, 0, 0.05); }
+
+  /* -------------------------------------------------------------------
+     Root cause list
+     ------------------------------------------------------------------- */
+  .rc-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .rc-list li {
+    background: var(--panel-2);
+    padding: 12px 16px;
+    border-radius: 6px;
+    border-left: 3px solid var(--rule);
+    font-size: 14px;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .rc-list li.correct {
+    border-left-color: var(--att-blue);
+    background: var(--c-signal-bg);
+  }
+  .rc-list li .rc-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: var(--ink-dim);
+    margin-right: 8px;
+  }
+  .rc-list li.correct .rc-tag { color: var(--att-blue); }
+
+  /* -------------------------------------------------------------------
+     Data tables
+     ------------------------------------------------------------------- */
+  .table-wrap {
+    overflow-x: auto;
+    background: var(--panel-2);
+    border-radius: 6px;
+    border: 1px solid var(--rule);
+    margin-top: 12px;
+    max-height: 500px;
+  }
+  table {
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    width: 100%;
+    min-width: max-content;
+  }
+  th, td {
+    padding: 7px 11px;
+    text-align: left;
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+  th {
+    background: var(--att-navy);
+    color: #fff;
+    font-weight: 500;
+    position: sticky;
+    top: 0;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+  }
+  th .term { color: #fff; }
+  th .term[data-cat="signal"]    { border-bottom-color: var(--att-sky); }
+  th .term[data-cat="topology"]  { border-bottom-color: #ffffff; }
+  th .term[data-cat="antenna"]   { border-bottom-color: #ffb168; }
+  th .term[data-cat="mobility"]  { border-bottom-color: #6ed3d9; }
+  th .term[data-cat="location"]  { border-bottom-color: #ff8fb6; }
+  tbody tr:hover { background: rgba(0, 159, 219, 0.04); }
+
+  /* -------------------------------------------------------------------
+     Sidebar tooltip
+     ------------------------------------------------------------------- */
+  .tooltip-empty {
+    color: var(--ink-dim);
+    font-style: italic;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .tooltip-empty .hint-key {
+    font-family: 'JetBrains Mono', monospace;
+    font-style: normal;
+    background: var(--panel-2);
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: var(--ink);
+    font-size: 12px;
+  }
+
+  .tip-card { animation: fadeIn 0.2s ease; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .tip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .tip-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+  }
+  .tip-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    font-weight: 500;
+  }
+  .tip-badge.signal    { background: var(--c-signal-bg);    color: var(--c-signal); }
+  .tip-badge.topology  { background: var(--c-topology-bg);  color: var(--c-topology); }
+  .tip-badge.antenna   { background: var(--c-antenna-bg);   color: var(--c-antenna); }
+  .tip-badge.mobility  { background: var(--c-mobility-bg);  color: var(--c-mobility); }
+  .tip-badge.location  { background: var(--c-location-bg);  color: var(--c-location); }
+
+  .tip-section { margin-bottom: 16px; }
+  .tip-section .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin-bottom: 5px;
+    display: block;
+  }
+  .tip-section .content {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--ink);
+  }
+  .tip-maps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .tip-maps .rc-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 10px;
+    background: var(--panel-2);
+    color: var(--ink);
+    border: 1px solid var(--rule);
+  }
+
+  /* -------------------------------------------------------------------
+     Legend
+     ------------------------------------------------------------------- */
+  .legend-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin: 0 0 12px 0;
+  }
+  .legend {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-bottom: 24px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .legend-swatch {
+    width: 9px; height: 9px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .legend-swatch.signal   { background: var(--c-signal); }
+  .legend-swatch.topology { background: var(--c-topology); }
+  .legend-swatch.antenna  { background: var(--c-antenna); }
+  .legend-swatch.mobility { background: var(--c-mobility); }
+  .legend-swatch.location { background: var(--c-location); }
+
+  /* -------------------------------------------------------------------
+     Loading / error states
+     ------------------------------------------------------------------- */
+  .status {
+    padding: 60px 40px;
+    text-align: center;
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+  }
+  .status.error {
+    color: #b00020;
+  }
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--rule);
+    border-top-color: var(--c-signal);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 10px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .footer-link {
+    margin-top: 32px;
+    padding-top: 20px;
+    border-top: 1px solid var(--rule);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-dim);
+  }
+  .footer-link a {
+    color: var(--c-signal);
+    text-decoration: none;
+  }
+  .footer-link a:hover { text-decoration: underline; }
+
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { position: static; height: auto; border-left: none; border-top: 1px solid var(--rule); }
+    .topbar { padding: 14px 24px; flex-wrap: wrap; }
+    main { padding: 32px 24px; }
+    .topbar select { min-width: 0; flex: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><strong>TeleLogs</strong> &nbsp;·&nbsp; 5G RCA Annotated Explorer</div>
+  <div class="controls">
+    <label for="case-select">Root Cause:</label>
+    <select id="case-select" disabled>
+      <option>Loading...</option>
+    </select>
+    <div class="answer-pill" id="answer-pill" style="display:none">—</div>
+  </div>
+</div>
+
+<div class="layout">
+  <main id="main-content">
+    <div class="status">
+      <span class="spinner"></span> Loading dataset from HuggingFace...
+    </div>
+  </main>
+
+  <aside>
+    <p class="legend-title">Category Legend</p>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-swatch signal"></span>Signal quality</div>
+      <div class="legend-item"><span class="legend-swatch topology"></span>Cell topology</div>
+      <div class="legend-item"><span class="legend-swatch antenna"></span>Antenna config</div>
+      <div class="legend-item"><span class="legend-swatch mobility"></span>Mobility / scheduling</div>
+      <div class="legend-item"><span class="legend-swatch location"></span>Geo / position</div>
+    </div>
+
+    <div id="tooltip-panel">
+      <p class="tooltip-empty">
+        Hover any <span class="hint-key">colored term</span> in the document to see what it means
+        and how it helps diagnose throughput drops.
+      </p>
+    </div>
+
+    <div class="footer-link">
+      Data: <a href="https://huggingface.co/datasets/LoneWolfgang/TeleLogs_sample" target="_blank" rel="noopener">LoneWolfgang/TeleLogs_sample</a>
+    </div>
+  </aside>
+</div>
+
+<script>
+// =============================================================================
+// 1.  Term dictionary
+// =============================================================================
+const TERMS = {
+  "throughput": {
+    name: "DL Throughput (Mbps)", cat: "signal",
+    what: "Downlink data rate the UE actually receives at the MAC layer.",
+    why:  "This is the symptom being investigated. Anything below 600 Mbps triggers RCA.",
+    typical: "Healthy 5G mid-band: 800–1200 Mbps. Threshold for this study: 600 Mbps.",
+    maps: ["target"]
+  },
+  "rsrp": {
+    name: "SS-RSRP (dBm)", cat: "signal",
+    what: "Reference Signal Received Power — average power per resource element from the serving cell.",
+    why:  "Weak RSRP indicates the UE is too far, too tilted away, or blocked. Direct evidence for C1 and C2.",
+    typical: "Excellent: > −80. Good: −80 to −90. Poor: < −100 dBm.",
+    maps: ["C1", "C2"]
+  },
+  "sinr": {
+    name: "SS-SINR (dB)", cat: "signal",
+    what: "Signal-to-Interference-plus-Noise Ratio at the serving cell.",
+    why:  "Drops when neighbors interfere with the serving signal. Low SINR + decent RSRP = interference problem (C4, C6).",
+    typical: "Excellent: > 20. Acceptable: 10–20. Poor: < 5 dB.",
+    maps: ["C4", "C6"]
+  },
+  "brsrp": {
+    name: "Neighbor BRSRP (dBm)", cat: "signal",
+    what: "Beam Reference Signal Received Power from a neighbor cell.",
+    why:  "If a neighbor's BRSRP exceeds the serving cell's RSRP, the UE may be on the wrong cell. Direct evidence for C3.",
+    typical: "Neighbors should be at least 6 dB weaker than serving cell to avoid contention.",
+    maps: ["C3", "C4"]
+  },
+  "serving-pci": {
+    name: "Serving PCI", cat: "topology",
+    what: "Physical Cell Identifier of the cell currently serving the UE (0–1007).",
+    why:  "Lets you (1) join to engineering params, (2) detect handovers by tracking PCI changes, and (3) compute PCI mod 30.",
+    typical: "Should remain stable in a single road section. Frequent changes → C5.",
+    maps: ["C5", "C6"]
+  },
+  "neighbor-pci": {
+    name: "Neighbor PCI", cat: "topology",
+    what: "PCI of a nearby cell the UE is also measuring (top 5 strongest).",
+    why:  "Neighbors with matching PCI mod 30 cause reference signal collisions (C6). Neighbors from different gNodeB sites suggest non-colocated interference (C4).",
+    typical: "Should belong to the same gNodeB site as the serving cell for clean coverage.",
+    maps: ["C4", "C6"]
+  },
+  "gnodeb": {
+    name: "gNodeB ID", cat: "topology",
+    what: "Identifier of the base station hosting the cell.",
+    why:  "Cells with the same gNodeB ID are colocated. If a strong neighbor has a different gNodeB ID, that's non-colocated co-frequency interference.",
+    typical: "Same as serving cell's gNodeB → colocated. Different → potential C4.",
+    maps: ["C4"]
+  },
+  "longitude": {
+    name: "Longitude", cat: "location",
+    what: "UE or cell position along the east-west axis.",
+    why:  "Combined with latitude, lets you compute UE-to-cell distance via haversine. Distance > 1 km from serving cell = C2.",
+    typical: "Compared with cell longitude to derive distance.",
+    maps: ["C2"]
+  },
+  "latitude": {
+    name: "Latitude", cat: "location",
+    what: "UE or cell position along the north-south axis.",
+    why:  "Combined with longitude, lets you compute UE-to-cell distance via haversine. Distance > 1 km from serving cell = C2.",
+    typical: "Compared with cell latitude to derive distance.",
+    maps: ["C2"]
+  },
+  "height": {
+    name: "Antenna Height (m)", cat: "location",
+    what: "How high the antenna is mounted above ground.",
+    why:  "Combined with total downtilt, determines where the main beam hits the ground. Tall antenna + steep tilt = short coverage radius.",
+    typical: "Macro: 20–40 m. Rooftop: 5–15 m. Tower: 50+ m.",
+    maps: ["C1"]
+  },
+  "mech-downtilt": {
+    name: "Mechanical Downtilt (°)", cat: "antenna",
+    what: "Physical tilt of the antenna toward the ground.",
+    why:  "Adds to digital tilt to give total downtilt. Steep total tilt + tall antenna = beam lands close, missing distant UEs (C1).",
+    typical: "2°–8° is typical. >15° is aggressive.",
+    maps: ["C1"]
+  },
+  "digital-tilt": {
+    name: "Digital Tilt (°)", cat: "antenna",
+    what: "Electronic beam steering applied on top of mechanical tilt. Value 255 = 6° (default).",
+    why:  "Must be decoded (255 → 6°) and added to mechanical tilt to get effective downtilt for C1 evaluation.",
+    typical: "0°–10°. Watch for the 255 sentinel value.",
+    maps: ["C1"]
+  },
+  "beam-scenario": {
+    name: "Beam Scenario", cat: "antenna",
+    what: "Codeword that determines vertical beamwidth: DEFAULT/1–5 → 6°, 6–11 → 12°, 12+ → 25°.",
+    why:  "Narrow beams (6°) tolerate far less misalignment. Combined with downtilt and height, defines whether the UE is inside the main beam (C1).",
+    typical: "DEFAULT or SCENARIO_1–5 for narrow long-range beams.",
+    maps: ["C1"]
+  },
+  "speed": {
+    name: "GPS Speed (km/h)", cat: "mobility",
+    what: "Velocity of the test vehicle at this timestamp.",
+    why:  "High speed degrades channel estimation and increases handover frequency. The defined threshold is 40 km/h (C7).",
+    typical: "Urban: 0–50. Highway: 60–120. Watch for sustained values above 40.",
+    maps: ["C7"]
+  },
+  "rb": {
+    name: "DL RB Num", cat: "mobility",
+    what: "Number of resource blocks scheduled to the UE on the downlink.",
+    why:  "Throughput is roughly proportional to RBs allocated. Average below 160 means the scheduler isn't giving enough bandwidth (C8).",
+    typical: "5G NR 100 MHz: up to 273 RBs. Threshold for C8: 160.",
+    maps: ["C8"]
+  }
+};
+
+// =============================================================================
+// 2.  Root cause definitions (extracted from the question prompt)
+// =============================================================================
+const ROOT_CAUSES = {
+  "C1": "The serving cell's downtilt angle is too large, causing weak coverage at the far end.",
+  "C2": "The serving cell's coverage distance exceeds 1km, resulting in over-shooting.",
+  "C3": "A neighboring cell provides higher throughput.",
+  "C4": "Non-colocated co-frequency neighboring cells cause severe overlapping coverage.",
+  "C5": "Frequent handovers degrade performance.",
+  "C6": "Neighbor cell and serving cell have the same PCI mod 30, leading to interference.",
+  "C7": "Test vehicle speed exceeds 40km/h, impacting user throughput.",
+  "C8": "Average scheduled RBs are below 160, affecting throughput."
+};
+
+// =============================================================================
+// 3.  Column → term mapping (so we can highlight headers in raw tables)
+// =============================================================================
+// Each entry: regex matched against the column header → {cat, term}
+const COL_TO_TERM = [
+  { re: /Longitude/i,                              cat: "location",  term: "longitude" },
+  { re: /Latitude/i,                               cat: "location",  term: "latitude" },
+  { re: /^Height$/i,                               cat: "location",  term: "height" },
+  { re: /GPS Speed/i,                              cat: "mobility",  term: "speed" },
+  { re: /RB Num/i,                                 cat: "mobility",  term: "rb" },
+  { re: /Serving PCI/i,                            cat: "topology",  term: "serving-pci" },
+  { re: /Neighbor.*PCI/i,                          cat: "topology",  term: "neighbor-pci" },
+  { re: /^PCI$/i,                                  cat: "topology",  term: "serving-pci" },
+  { re: /gNodeB/i,                                 cat: "topology",  term: "gnodeb" },
+  { re: /RSRP.*Serving|Serving.*RSRP/i,            cat: "signal",    term: "rsrp" },
+  { re: /SINR/i,                                   cat: "signal",    term: "sinr" },
+  { re: /BRSRP/i,                                  cat: "signal",    term: "brsrp" },
+  { re: /Throughput/i,                             cat: "signal",    term: "throughput" },
+  { re: /Mechanical Downtilt/i,                    cat: "antenna",   term: "mech-downtilt" },
+  { re: /Digital Tilt/i,                           cat: "antenna",   term: "digital-tilt" },
+  { re: /Beam Scenario/i,                          cat: "antenna",   term: "beam-scenario" }
+];
+
+function annotateColumn(headerText) {
+  const t = headerText.trim();
+  for (const m of COL_TO_TERM) {
+    if (m.re.test(t)) {
+      return `<span class="term" data-cat="${m.cat}" data-term="${m.term}">${escapeHtml(t)}</span>`;
+    }
+  }
+  return escapeHtml(t);
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+// =============================================================================
+// 4.  Parse a question string into its three parts
+// =============================================================================
+function parseQuestion(rawText) {
+  // Find the two table headers
+  const driveHeaderIdx = rawText.indexOf("Timestamp|Longitude");
+  const engHeaderIdx   = rawText.indexOf("gNodeB ID|Cell ID");
+
+  if (driveHeaderIdx === -1 || engHeaderIdx === -1) {
+    return { prose: rawText, driveTable: null, engTable: null };
+  }
+
+  // Prose is everything before "User plane drive test data"
+  const proseEnd = rawText.indexOf("User plane drive test data");
+  const prose = proseEnd > 0 ? rawText.slice(0, proseEnd).trim() : rawText.slice(0, driveHeaderIdx).trim();
+
+  // Drive test block: from drive header to eng header (or "Engineering" prose)
+  const engProseIdx = rawText.lastIndexOf("Engeneering parameters", engHeaderIdx);
+  const engProseStart = engProseIdx > driveHeaderIdx ? engProseIdx : engHeaderIdx;
+  const driveBlock = rawText.slice(driveHeaderIdx, engProseStart).trim();
+  const engBlock   = rawText.slice(engHeaderIdx).trim();
+
+  return {
+    prose,
+    driveTable: parsePipeTable(driveBlock),
+    engTable:   parsePipeTable(engBlock)
+  };
+}
+
+function parsePipeTable(block) {
+  const lines = block.split("\n").map(l => l.trim()).filter(Boolean);
+  if (lines.length < 2) return null;
+  const header = lines[0].split("|").map(s => s.trim());
+  const rows = lines.slice(1).map(l => l.split("|").map(s => s.trim()));
+  return { header, rows };
+}
+
+// =============================================================================
+// 5.  Render the document for a given case
+// =============================================================================
+function renderCase(question, answerLabel) {
+  const parts = parseQuestion(question);
+  const main  = document.getElementById("main-content");
+
+  let html = `
+    <h1>5G Drive Test <span class="accent">RCA Case</span></h1>
+    <p class="subtitle">Annotated walkthrough — hover any colored term to inspect it.</p>
+
+    <h2>The Question</h2>
+    <p>
+      Analyze the 5G wireless network drive-test user plane data and engineering parameters.
+      Identify the reason for the
+      <span class="term" data-cat="signal" data-term="throughput">throughput</span>
+      dropping below 600 Mbps in certain road sections.
+      From the 8 potential root causes below, select the most likely one.
+    </p>
+
+    <h2>Root Cause Candidates</h2>
+    <ul class="rc-list">
+  `;
+  for (const [code, desc] of Object.entries(ROOT_CAUSES)) {
+    const correct = (code === answerLabel) ? "correct" : "";
+    html += `<li class="${correct}"><span class="rc-tag">${code}</span>${escapeHtml(desc)}</li>`;
+  }
+  html += `</ul>`;
+
+  if (parts.driveTable) {
+    html += `<h2>Drive Test Data — User Plane</h2>${renderTable(parts.driveTable)}`;
+  }
+  if (parts.engTable) {
+    html += `<h2>Engineering Parameters</h2>${renderTable(parts.engTable)}`;
+  }
+
+  main.innerHTML = html;
+  bindHovers();
+}
+
+function renderTable(t) {
+  let html = `<div class="table-wrap"><table><thead><tr>`;
+  for (const h of t.header) {
+    html += `<th>${annotateColumn(h)}</th>`;
+  }
+  html += `</tr></thead><tbody>`;
+  for (const row of t.rows) {
+    html += `<tr>` + row.map(c => `<td>${escapeHtml(c)}</td>`).join("") + `</tr>`;
+  }
+  html += `</tbody></table></div>`;
+  return html;
+}
+
+// =============================================================================
+// 6.  Sidebar tooltip rendering
+// =============================================================================
+const panel = document.getElementById("tooltip-panel");
+
+function renderTip(t) {
+  const mapChips = t.maps.map(m => `<span class="rc-chip">${m}</span>`).join("");
+  panel.innerHTML = `
+    <div class="tip-card">
+      <div class="tip-header">
+        <div class="tip-name">${t.name}</div>
+        <div class="tip-badge ${t.cat}">${t.cat}</div>
+      </div>
+      <div class="tip-section"><span class="label">What</span><div class="content">${t.what}</div></div>
+      <div class="tip-section"><span class="label">Why it matters</span><div class="content">${t.why}</div></div>
+      <div class="tip-section"><span class="label">Typical values</span><div class="content">${t.typical}</div></div>
+      <div class="tip-section"><span class="label">Maps to</span><div class="tip-maps">${mapChips}</div></div>
+    </div>
+  `;
+}
+
+function bindHovers() {
+  document.querySelectorAll(".term").forEach(el => {
+    el.addEventListener("mouseenter", () => {
+      const key = el.dataset.term;
+      const t = TERMS[key];
+      if (!t) return;
+      document.querySelectorAll(".term.active").forEach(a => a.classList.remove("active"));
+      el.classList.add("active");
+      renderTip(t);
+    });
+  });
+}
+
+// =============================================================================
+// 7.  Extract answer label (e.g. "C3") from an answer field
+// =============================================================================
+function extractAnswer(answerField) {
+  if (!answerField) return null;
+  // Try \boxed{C3} or \boxed{{C3}}
+  const boxed = /\\boxed\{+\s*(C\d)\s*\}+/.exec(answerField);
+  if (boxed) return boxed[1];
+  // Fallback: first occurrence of C<digit>
+  const m = /\bC([1-8])\b/.exec(answerField);
+  return m ? `C${m[1]}` : null;
+}
+
+// =============================================================================
+// 8.  Load dataset from HuggingFace datasets-server
+// =============================================================================
+const HF_DATASET = "LoneWolfgang/TeleLogs_sample";
+
+async function loadDataset() {
+  // Try common splits in order
+  const splits = ["train", "test", "validation"];
+  let rows = null, usedSplit = null;
+
+  for (const split of splits) {
+    const url = `https://datasets-server.huggingface.co/rows`
+              + `?dataset=${encodeURIComponent(HF_DATASET)}`
+              + `&config=default&split=${split}&offset=0&length=100`;
+    try {
+      const r = await fetch(url);
+      if (!r.ok) continue;
+      const data = await r.json();
+      if (data.rows && data.rows.length > 0) {
+        rows = data.rows;
+        usedSplit = split;
+        break;
+      }
+    } catch (e) { /* try next */ }
+  }
+
+  if (!rows) throw new Error("No rows returned from HuggingFace API.");
+
+  // Each row: { row_idx, row: { question, answer, ... } }
+  const cases = rows.map(r => {
+    const fields = r.row || {};
+    const question = fields.question || fields.prompt || "";
+    const answer   = fields.answer   || fields.label  || fields.solution || "";
+    return {
+      idx:      r.row_idx,
+      question,
+      answer,
+      label:    extractAnswer(answer) || extractAnswer(question) || "?"
+    };
+  });
+
+  return { cases, split: usedSplit };
+}
+
+// =============================================================================
+// 9.  Populate dropdown and wire selection
+// =============================================================================
+function populateDropdown(cases) {
+  const sel = document.getElementById("case-select");
+  sel.innerHTML = "";
+
+  // Sort by label (C1, C2, ...)
+  const sorted = [...cases].sort((a, b) => (a.label || "").localeCompare(b.label || ""));
+
+  for (const c of sorted) {
+    const opt = document.createElement("option");
+    opt.value = c.idx;
+    const desc = ROOT_CAUSES[c.label];
+    opt.textContent = desc ? `${c.label} — ${desc.slice(0, 60)}${desc.length > 60 ? "…" : ""}` : `Case #${c.idx}`;
+    sel.appendChild(opt);
+  }
+  sel.disabled = false;
+
+  const byIdx = Object.fromEntries(cases.map(c => [c.idx, c]));
+  const pill = document.getElementById("answer-pill");
+
+  sel.addEventListener("change", () => {
+    const c = byIdx[sel.value];
+    if (!c) return;
+    pill.style.display = "inline-block";
+    pill.textContent = `Answer: ${c.label}`;
+    renderCase(c.question, c.label);
+  });
+
+  // Render the first one
+  if (sorted.length) {
+    sel.value = sorted[0].idx;
+    sel.dispatchEvent(new Event("change"));
+  }
+}
+
+// =============================================================================
+// 10.  Boot
+// =============================================================================
+(async function init() {
+  try {
+    const { cases } = await loadDataset();
+    if (!cases.length) throw new Error("Dataset returned 0 cases.");
+    populateDropdown(cases);
+  } catch (err) {
+    console.error(err);
+    document.getElementById("main-content").innerHTML = `
+      <div class="status error">
+        Failed to load dataset.<br><br>
+        ${escapeHtml(err.message)}<br><br>
+        Check the browser console for details, and verify the dataset is public at
+        <a href="https://huggingface.co/datasets/${HF_DATASET}" target="_blank" style="color:var(--c-signal)">${HF_DATASET}</a>.
+      </div>
+    `;
+  }
+})();
+</script>
+
+</body>
+</html>
