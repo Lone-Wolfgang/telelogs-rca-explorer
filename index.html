@@ -230,13 +230,19 @@
     font-size: 14px;
     cursor: pointer;
     user-select: none;
-    position: relative;
-    transition: border-color 0.2s, background 0.2s, transform 0.15s, opacity 0.2s;
+    transition: border-color 0.2s, background 0.2s, transform 0.15s;
   }
   .rc-list li:hover {
     background: #e3edf5;
     border-left-color: var(--att-blue);
     transform: translateX(2px);
+  }
+  .rc-list li.correct {
+    border-left-color: var(--att-blue);
+    background: var(--c-signal-bg);
+  }
+  .rc-list li.correct:hover {
+    background: var(--c-signal-bg);
   }
   .rc-list li .rc-tag {
     font-family: 'JetBrains Mono', monospace;
@@ -244,56 +250,7 @@
     color: var(--ink-dim);
     margin-right: 8px;
   }
-
-  /* Revealed states — after the user has clicked */
-  .rc-list li.revealed {
-    cursor: default;
-  }
-  .rc-list li.revealed:hover {
-    transform: none;
-  }
-  .rc-list li.revealed.correct {
-    border-left-color: #00875A;
-    background: rgba(0, 135, 90, 0.10);
-  }
-  .rc-list li.revealed.correct .rc-tag { color: #00875A; }
-
-  .rc-list li.revealed.incorrect {
-    border-left-color: #C13030;
-    background: rgba(193, 48, 48, 0.06);
-    opacity: 0.55;
-  }
-  .rc-list li.revealed.incorrect .rc-tag { color: #C13030; }
-
-  /* The user's wrong pick stands out from the other deemphasized wrong ones */
-  .rc-list li.revealed.user-pick.incorrect {
-    opacity: 1;
-    background: rgba(193, 48, 48, 0.12);
-    text-decoration: line-through;
-    text-decoration-color: rgba(193, 48, 48, 0.5);
-  }
-
-  /* Check / X markers on the revealed items */
-  .rc-list li.revealed.correct::after {
-    content: "✓";
-    position: absolute;
-    right: 14px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #00875A;
-    font-weight: 700;
-    font-size: 16px;
-  }
-  .rc-list li.revealed.user-pick.incorrect::after {
-    content: "✗";
-    position: absolute;
-    right: 14px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #C13030;
-    font-weight: 700;
-    font-size: 16px;
-  }
+  .rc-list li.correct .rc-tag { color: var(--att-blue); }
 
   /* -------------------------------------------------------------------
      Data tables
@@ -387,11 +344,11 @@
     flex-shrink: 0;
     font-weight: 500;
   }
-  .tip-badge.signal    { background: var(--c-signal-bg);    color: var(--c-signal); }
-  .tip-badge.topology  { background: var(--c-topology-bg);  color: var(--c-topology); }
-  .tip-badge.antenna   { background: var(--c-antenna-bg);   color: var(--c-antenna); }
-  .tip-badge.mobility  { background: var(--c-mobility-bg);  color: var(--c-mobility); }
-  .tip-badge.location  { background: var(--c-location-bg);  color: var(--c-location); }
+  .tip-badge.signal    { background: var(--c-signal);    color: #fff; }
+    .tip-badge.topology  { background: var(--att-navy);    color: #fff; }
+    .tip-badge.antenna   { background: #C75300;            color: #fff; }
+    .tip-badge.mobility  { background: #00838A;            color: #fff; }
+    .tip-badge.location  { background: #B02365;            color: #fff; }
 
   .tip-section { margin-bottom: 16px; }
   .tip-section .label {
@@ -780,7 +737,8 @@ function renderCase(question, answerLabel) {
     <ul class="rc-list">
   `;
   for (const [code, desc] of Object.entries(ROOT_CAUSES)) {
-    html += `<li data-code="${code}" data-correct="${code === answerLabel}">`
+    const correct = (code === answerLabel) ? "correct" : "";
+    html += `<li class="${correct}" data-code="${code}" title="Jump to ${code} case">`
           + `<span class="rc-tag">${code}</span>${escapeHtml(desc)}</li>`;
   }
   html += `</ul>`;
@@ -794,7 +752,7 @@ function renderCase(question, answerLabel) {
 
   main.innerHTML = html;
   bindHovers();
-  bindRootCauseButtons(answerLabel);
+  bindRootCauseNav();
 }
 
 function renderTable(t) {
@@ -844,36 +802,18 @@ function bindHovers() {
   });
 }
 
-function bindRootCauseButtons(answerLabel) {
-  const items = document.querySelectorAll(".rc-list li");
-  items.forEach(li => {
+function bindRootCauseNav() {
+  const sel = document.getElementById("case-select");
+  if (!sel) return;
+
+  document.querySelectorAll(".rc-list li").forEach(li => {
     li.addEventListener("click", () => {
-      // Block re-answering once revealed
-      if (li.classList.contains("revealed")) return;
-
-      const picked    = li.dataset.code;
-      const isCorrect = li.dataset.correct === "true";
-
-      items.forEach(other => {
-        const wasCorrect = other.dataset.correct === "true";
-        other.classList.add("revealed");
-        other.classList.add(wasCorrect ? "correct" : "incorrect");
-        if (other.dataset.code === picked) {
-          other.classList.add("user-pick");
-        }
-      });
-
-      const pill = document.getElementById("answer-pill");
-      pill.style.display = "inline-block";
-      if (isCorrect) {
-        pill.textContent = `✓ Correct — ${answerLabel}`;
-        pill.style.background = "#00875A";
-        pill.style.borderColor = "#00875A";
-      } else {
-        pill.textContent = `✗ Answer was ${answerLabel}`;
-        pill.style.background = "#C13030";
-        pill.style.borderColor = "#C13030";
-      }
+      const code = li.dataset.code;
+      const idx  = window.__caseByLabel && window.__caseByLabel[code];
+      if (idx === undefined) return;       // no case in dataset for this code
+      if (String(sel.value) === String(idx)) return;  // already selected
+      sel.value = idx;
+      sel.dispatchEvent(new Event("change"));
     });
   });
 }
@@ -955,15 +895,15 @@ function populateDropdown(cases) {
   sel.disabled = false;
 
   const byIdx = Object.fromEntries(cases.map(c => [c.idx, c]));
+  // Expose a label → idx lookup so the rc-list buttons can navigate
+  window.__caseByLabel = Object.fromEntries(cases.map(c => [c.label, c.idx]));
   const pill = document.getElementById("answer-pill");
 
   sel.addEventListener("change", () => {
     const c = byIdx[sel.value];
     if (!c) return;
-    // Hide the answer pill until the user picks an answer
-    pill.style.display = "none";
-    pill.style.background = "";
-    pill.style.borderColor = "";
+    pill.style.display = "inline-block";
+    pill.textContent = `Answer: ${c.label}`;
     renderCase(c.question, c.label);
   });
 
