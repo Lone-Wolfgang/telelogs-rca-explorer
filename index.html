@@ -228,11 +228,15 @@
     border-radius: 6px;
     border-left: 3px solid var(--rule);
     font-size: 14px;
-    transition: border-color 0.2s, background 0.2s;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    transition: border-color 0.2s, background 0.2s, transform 0.15s, opacity 0.2s;
   }
-  .rc-list li.correct {
+  .rc-list li:hover {
+    background: #e3edf5;
     border-left-color: var(--att-blue);
-    background: var(--c-signal-bg);
+    transform: translateX(2px);
   }
   .rc-list li .rc-tag {
     font-family: 'JetBrains Mono', monospace;
@@ -240,7 +244,56 @@
     color: var(--ink-dim);
     margin-right: 8px;
   }
-  .rc-list li.correct .rc-tag { color: var(--att-blue); }
+
+  /* Revealed states — after the user has clicked */
+  .rc-list li.revealed {
+    cursor: default;
+  }
+  .rc-list li.revealed:hover {
+    transform: none;
+  }
+  .rc-list li.revealed.correct {
+    border-left-color: #00875A;
+    background: rgba(0, 135, 90, 0.10);
+  }
+  .rc-list li.revealed.correct .rc-tag { color: #00875A; }
+
+  .rc-list li.revealed.incorrect {
+    border-left-color: #C13030;
+    background: rgba(193, 48, 48, 0.06);
+    opacity: 0.55;
+  }
+  .rc-list li.revealed.incorrect .rc-tag { color: #C13030; }
+
+  /* The user's wrong pick stands out from the other deemphasized wrong ones */
+  .rc-list li.revealed.user-pick.incorrect {
+    opacity: 1;
+    background: rgba(193, 48, 48, 0.12);
+    text-decoration: line-through;
+    text-decoration-color: rgba(193, 48, 48, 0.5);
+  }
+
+  /* Check / X markers on the revealed items */
+  .rc-list li.revealed.correct::after {
+    content: "✓";
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #00875A;
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .rc-list li.revealed.user-pick.incorrect::after {
+    content: "✗";
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #C13030;
+    font-weight: 700;
+    font-size: 16px;
+  }
 
   /* -------------------------------------------------------------------
      Data tables
@@ -727,8 +780,8 @@ function renderCase(question, answerLabel) {
     <ul class="rc-list">
   `;
   for (const [code, desc] of Object.entries(ROOT_CAUSES)) {
-    const correct = (code === answerLabel) ? "correct" : "";
-    html += `<li class="${correct}"><span class="rc-tag">${code}</span>${escapeHtml(desc)}</li>`;
+    html += `<li data-code="${code}" data-correct="${code === answerLabel}">`
+          + `<span class="rc-tag">${code}</span>${escapeHtml(desc)}</li>`;
   }
   html += `</ul>`;
 
@@ -741,6 +794,7 @@ function renderCase(question, answerLabel) {
 
   main.innerHTML = html;
   bindHovers();
+  bindRootCauseButtons(answerLabel);
 }
 
 function renderTable(t) {
@@ -786,6 +840,40 @@ function bindHovers() {
       document.querySelectorAll(".term.active").forEach(a => a.classList.remove("active"));
       el.classList.add("active");
       renderTip(t);
+    });
+  });
+}
+
+function bindRootCauseButtons(answerLabel) {
+  const items = document.querySelectorAll(".rc-list li");
+  items.forEach(li => {
+    li.addEventListener("click", () => {
+      // Block re-answering once revealed
+      if (li.classList.contains("revealed")) return;
+
+      const picked    = li.dataset.code;
+      const isCorrect = li.dataset.correct === "true";
+
+      items.forEach(other => {
+        const wasCorrect = other.dataset.correct === "true";
+        other.classList.add("revealed");
+        other.classList.add(wasCorrect ? "correct" : "incorrect");
+        if (other.dataset.code === picked) {
+          other.classList.add("user-pick");
+        }
+      });
+
+      const pill = document.getElementById("answer-pill");
+      pill.style.display = "inline-block";
+      if (isCorrect) {
+        pill.textContent = `✓ Correct — ${answerLabel}`;
+        pill.style.background = "#00875A";
+        pill.style.borderColor = "#00875A";
+      } else {
+        pill.textContent = `✗ Answer was ${answerLabel}`;
+        pill.style.background = "#C13030";
+        pill.style.borderColor = "#C13030";
+      }
     });
   });
 }
@@ -872,8 +960,10 @@ function populateDropdown(cases) {
   sel.addEventListener("change", () => {
     const c = byIdx[sel.value];
     if (!c) return;
-    pill.style.display = "inline-block";
-    pill.textContent = `Answer: ${c.label}`;
+    // Hide the answer pill until the user picks an answer
+    pill.style.display = "none";
+    pill.style.background = "";
+    pill.style.borderColor = "";
     renderCase(c.question, c.label);
   });
 
